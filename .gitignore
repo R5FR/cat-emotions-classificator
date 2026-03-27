@@ -8,6 +8,7 @@ saved_model/
 # ── Figures générées par le notebook ─────────────────────────
 eda_*.png
 cnn_*.png
+rf_*.png
 mnv2_*.png
 comparison_*.png
 gradcam_*.png
