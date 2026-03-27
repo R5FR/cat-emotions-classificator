@@ -1,5 +1,10 @@
 # Cat Emotions Classifier
 
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python)](https://python.org)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.13%2B-orange?logo=tensorflow)](https://tensorflow.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.32%2B-red?logo=streamlit)](https://streamlit.io)
+[![License](https://img.shields.io/badge/Dataset-CC%20BY%204.0-green)](https://creativecommons.org/licenses/by/4.0/)
+
 Classificateur d'émotions félines par deep learning, développé dans le cadre du **Projet Data** (évaluation 2026).
 
 ## Problématique
@@ -32,8 +37,8 @@ Classificateur d'émotions félines par deep learning, développé dans le cadre
 ## Installation
 
 ```bash
-git clone <url-du-repo>
-cd <nom-du-repo>
+git clone https://github.com/R5FR/cat-emotions-classificator.git
+cd cat-emotions-classificator
 
 python -m venv venv
 venv\Scripts\activate        # Windows
