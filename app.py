@@ -70,7 +70,7 @@ NAV_PAGES = ["Prédiction", "Dataset", "Résultats", "À propos"]
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Cat Emotions Classifier",
-    page_icon="🐱",
+    page_icon="fa-face-meh",
     layout="wide",
     initial_sidebar_state="expanded",
 )
