@@ -1,16 +1,13 @@
 """
 Streamlit App — Classificateur d'Émotions Félines
 Cat Emotions Dataset (Roboflow) — 7 classes
+Icons : Font Awesome 6 (CDN)
 """
 
-import os
-import random
-import warnings
+import os, random, warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.cm as mpl_cm
-import seaborn as sns
 import streamlit as st
 from pathlib import Path
 from PIL import Image
@@ -18,7 +15,6 @@ from collections import Counter
 
 warnings.filterwarnings("ignore")
 
-# ── TensorFlow (import conditionnel pour éviter crash si absent) ──────────────
 try:
     import tensorflow as tf
     from tensorflow.keras.preprocessing.image import img_to_array
@@ -27,9 +23,9 @@ try:
 except ImportError:
     TF_AVAILABLE = False
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # CONSTANTES
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 CLASSES    = ['Angry', 'Disgusted', 'Happy', 'Normal', 'Sad', 'Scared', 'Surprised']
 IMG_SIZE   = 128
 BASE_DIR   = Path(__file__).parent
@@ -37,24 +33,24 @@ TRAIN_DIR  = BASE_DIR / "train"
 VALID_DIR  = BASE_DIR / "valid"
 MODEL_PATH = BASE_DIR / "best_mnv2_model.keras"
 
-EMOTION_EMOJI = {
-    "Angry":     "😾",
-    "Disgusted": "🤢",
-    "Happy":     "😸",
-    "Normal":    "🐱",
-    "Sad":       "😿",
-    "Scared":    "😱",
-    "Surprised": "😲",
+EMOTION_ICON = {
+    "Angry":     "fa-face-angry",
+    "Disgusted": "fa-face-grimace",
+    "Happy":     "fa-face-grin-beam",
+    "Normal":    "fa-face-meh",
+    "Sad":       "fa-face-sad-tear",
+    "Scared":    "fa-face-flushed",
+    "Surprised": "fa-face-surprise",
 }
 
 EMOTION_TIPS = {
     "Angry":     "Votre chat est en colère. Donnez-lui de l'espace, évitez tout contact forcé.",
     "Disgusted": "Votre chat exprime du dégoût. Vérifiez son alimentation et son environnement.",
-    "Happy":     "Votre chat est heureux ! Moment idéal pour jouer ou câliner.",
+    "Happy":     "Votre chat est heureux ! Moment idéal pour jouer ou le câliner.",
     "Normal":    "Votre chat est calme et détendu. Tout va bien.",
     "Sad":       "Votre chat semble triste. Augmentez les interactions et l'enrichissement.",
     "Scared":    "Votre chat a peur. Identifiez et éliminez la source de stress.",
-    "Surprised": "Votre chat est surpris. Cela est généralement passager.",
+    "Surprised": "Votre chat est surpris. C'est généralement passager.",
 }
 
 PALETTE = {
@@ -67,12 +63,183 @@ PALETTE = {
     "Surprised": "#F39C12",
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# UTILITAIRES
-# ─────────────────────────────────────────────────────────────────────────────
+NAV_PAGES = ["Prédiction", "Dataset", "Résultats", "À propos"]
+
+# ─────────────────────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Cat Emotions Classifier",
+    page_icon="🐱",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ─────────────────────────────────────────────────────────────
+# CSS + FONT AWESOME
+# ─────────────────────────────────────────────────────────────
+st.markdown("""
+<link rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+  crossorigin="anonymous">
+
+<style>
+/* ── Globals ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background: #0f172a !important;
+    border-right: 1px solid #1e293b;
+}
+section[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
+section[data-testid="stSidebar"] .stRadio label {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    transition: background 0.2s;
+    cursor: pointer;
+    font-size: 0.92rem;
+}
+section[data-testid="stSidebar"] .stRadio label:hover {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+/* ── Page header ── */
+.page-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 1.2rem 0 0.4rem 0;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 1.5rem;
+}
+.page-header i { font-size: 1.6rem; color: #6366f1; }
+.page-header h1 {
+    font-size: 1.6rem; font-weight: 700;
+    color: #0f172a; margin: 0;
+}
+.page-header p { color: #64748b; font-size: 0.9rem; margin: 0; }
+
+/* ── KPI cards ── */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem; margin-bottom: 1.5rem;
+}
+.kpi-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.1rem 1.2rem;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.kpi-card i { font-size: 1.4rem; color: #6366f1; margin-bottom: 0.4rem; display: block; }
+.kpi-value { font-size: 1.8rem; font-weight: 700; color: #0f172a; line-height: 1; }
+.kpi-label { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+
+/* ── Model status badge ── */
+.badge-ok  { background:#dcfce7; color:#166534; padding:0.25rem 0.7rem; border-radius:20px; font-size:0.8rem; font-weight:600; }
+.badge-err { background:#fee2e2; color:#991b1b; padding:0.25rem 0.7rem; border-radius:20px; font-size:0.8rem; font-weight:600; }
+
+/* ── Prediction result card ── */
+.pred-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 1.8rem;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.pred-icon { font-size: 3.5rem; margin-bottom: 0.5rem; }
+.pred-label {
+    display: inline-block;
+    padding: 0.4rem 1.2rem;
+    border-radius: 24px;
+    font-weight: 700; font-size: 1.2rem;
+    color: white; margin-bottom: 0.5rem;
+}
+.pred-conf { color: #64748b; font-size: 0.95rem; }
+
+/* ── Tip box ── */
+.tip-box {
+    background: #f0f9ff;
+    border-left: 4px solid #6366f1;
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: #1e3a5f;
+}
+.tip-box i { color: #6366f1; margin-right: 0.4rem; }
+
+/* ── Warning badge ── */
+.warn-box {
+    background: #fffbeb; border-left: 4px solid #f59e0b;
+    border-radius: 0 8px 8px 0;
+    padding: 0.7rem 1rem; margin-top: 0.8rem;
+    color: #78350f; font-size: 0.88rem;
+}
+
+/* ── Section title ── */
+.section-title {
+    font-size: 1rem; font-weight: 600;
+    color: #374151; margin: 1.2rem 0 0.6rem 0;
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.section-title i { color: #6366f1; }
+
+/* ── Comparison table ── */
+.comp-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.comp-table th {
+    background: #f8fafc; padding: 0.6rem 1rem;
+    border-bottom: 2px solid #e2e8f0; text-align: left;
+    font-weight: 600; color: #374151;
+}
+.comp-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #f1f5f9; }
+.comp-table tr:last-child td { border-bottom: none; }
+.best-row td { background: #f0fdf4; font-weight: 600; }
+
+/* ── Sidebar logo ── */
+.sidebar-logo {
+    text-align: center; padding: 1.5rem 0 1rem 0;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 1rem;
+}
+.sidebar-logo i { font-size: 2.2rem; color: #818cf8; }
+.sidebar-logo h2 { font-size: 1rem; font-weight: 700; color: #f1f5f9 !important; margin: 0.4rem 0 0.1rem 0; }
+.sidebar-logo p  { font-size: 0.75rem; color: #94a3b8 !important; margin: 0; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────
+def icon(fa_class, extra=""):
+    return f'<i class="fa-solid {fa_class} {extra}"></i>'
+
+def page_header(fa_class, title, subtitle=""):
+    sub_html = f'<p>{subtitle}</p>' if subtitle else ""
+    st.markdown(f"""
+    <div class="page-header">
+        {icon(fa_class)}
+        <div><h1>{title}</h1>{sub_html}</div>
+    </div>""", unsafe_allow_html=True)
+
+def kpi_row(items):
+    """items = list of (fa_icon, value, label)"""
+    cols_html = "".join(f"""
+        <div class="kpi-card">
+            {icon(fa, 'kpi-icon')}
+            <div class="kpi-value">{val}</div>
+            <div class="kpi-label">{lbl}</div>
+        </div>""" for fa, val, lbl in items)
+    st.markdown(f'<div class="kpi-grid">{cols_html}</div>', unsafe_allow_html=True)
+
 @st.cache_data
 def get_dataset_stats():
-    """Calcule les statistiques du dataset une seule fois."""
     stats = {"train": {}, "valid": {}}
     for split, d in [("train", TRAIN_DIR), ("valid", VALID_DIR)]:
         if d.exists():
@@ -83,593 +250,516 @@ def get_dataset_stats():
                     stats[split][cls_dir.name] = imgs
     return stats
 
-
 @st.cache_data
-def get_sample_images(n_per_class=4):
-    """Retourne des chemins d'images exemples par classe."""
+def get_sample_images(n=5):
     stats = get_dataset_stats()
     samples = {}
     for cls in CLASSES:
         paths = stats["train"].get(cls, []) + stats["valid"].get(cls, [])
         if paths:
             random.seed(42)
-            samples[cls] = random.sample(paths, min(n_per_class, len(paths)))
+            samples[cls] = random.sample(paths, min(n, len(paths)))
     return samples
-
 
 @st.cache_resource
 def load_model():
-    """Charge le modèle MobileNetV2 sauvegardé."""
-    if not TF_AVAILABLE:
-        return None
-    if not MODEL_PATH.exists():
+    if not TF_AVAILABLE or not MODEL_PATH.exists():
         return None
     try:
-        model = tf.keras.models.load_model(str(MODEL_PATH))
-        return model
-    except Exception as e:
-        st.warning(f"Impossible de charger le modèle : {e}")
+        return tf.keras.models.load_model(str(MODEL_PATH))
+    except Exception:
         return None
 
-
 def preprocess_image(pil_img):
-    """Prétraitement d'une image PIL pour MobileNetV2."""
     img = pil_img.convert("RGB").resize((IMG_SIZE, IMG_SIZE))
     arr = img_to_array(img)
-    arr = mnv2_preprocess(arr)
-    return np.expand_dims(arr, axis=0)  # (1, 128, 128, 3)
-
+    return np.expand_dims(mnv2_preprocess(arr), axis=0)
 
 def predict(model, pil_img):
-    """Retourne (classe prédite, dict probabilités)."""
-    arr = preprocess_image(pil_img)
-    proba = model.predict(arr, verbose=0)[0]
-    pred_idx = int(np.argmax(proba))
-    return CLASSES[pred_idx], dict(zip(CLASSES, proba.tolist()))
-
+    proba = model.predict(preprocess_image(pil_img), verbose=0)[0]
+    idx   = int(np.argmax(proba))
+    return CLASSES[idx], dict(zip(CLASSES, proba.tolist()))
 
 def get_gradcam(model, pil_img, class_idx=None):
-    """Calcule et retourne la heatmap Grad-CAM (np.array [0,1])."""
     if not TF_AVAILABLE or model is None:
         return None
     arr = preprocess_image(pil_img)
-
-    # Trouver dernière conv dans le backbone
-    last_conv = "out_relu"
-    backbone = None
-    for layer in model.layers:
-        if hasattr(layer, "layers"):
-            backbone = layer
-            break
-
+    backbone = next((l for l in model.layers if hasattr(l, "layers")), None)
     if backbone is None:
         return None
-
     try:
         grad_model = tf.keras.Model(
             inputs=model.inputs,
-            outputs=[backbone.get_layer(last_conv).output, model.output],
+            outputs=[backbone.get_layer("out_relu").output, model.output],
         )
         with tf.GradientTape() as tape:
             img_t = tf.cast(arr, tf.float32)
             conv_out, preds = grad_model(img_t)
             if class_idx is None:
                 class_idx = int(tf.argmax(preds[0]))
-            class_score = preds[:, class_idx]
-
-        grads = tape.gradient(class_score, conv_out)
+            score = preds[:, class_idx]
+        grads = tape.gradient(score, conv_out)
         pooled = tf.reduce_mean(grads, axis=(0, 1, 2))
-        heatmap = conv_out[0] @ pooled[..., tf.newaxis]
-        heatmap = tf.squeeze(heatmap)
-        heatmap = tf.maximum(heatmap, 0)
-        heatmap = heatmap / (tf.reduce_max(heatmap) + 1e-8)
-        return heatmap.numpy()
+        hm = tf.squeeze(conv_out[0] @ pooled[..., tf.newaxis])
+        hm = tf.maximum(hm, 0)
+        hm = hm / (tf.reduce_max(hm) + 1e-8)
+        return hm.numpy()
     except Exception:
         return None
 
-
 def overlay_gradcam(pil_img, heatmap, alpha=0.45):
-    """Superpose la heatmap sur l'image PIL originale."""
     w, h = pil_img.size
-    hm_resized = np.array(
-        Image.fromarray(np.uint8(255 * heatmap)).resize((w, h), Image.BILINEAR)
-    )
-    colormap = plt.get_cmap("jet")
-    hm_colored = colormap(hm_resized / 255.0)[:, :, :3]
-    img_arr = np.array(pil_img.convert("RGB")) / 255.0
-    overlay = alpha * hm_colored + (1 - alpha) * img_arr
-    return Image.fromarray(np.uint8(np.clip(overlay, 0, 1) * 255))
+    hm = np.array(Image.fromarray(np.uint8(255 * heatmap)).resize((w, h), Image.BILINEAR))
+    colored = plt.get_cmap("jet")(hm / 255.0)[:, :, :3]
+    base = np.array(pil_img.convert("RGB")) / 255.0
+    return Image.fromarray(np.uint8(np.clip(alpha * colored + (1 - alpha) * base, 0, 1) * 255))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Cat Emotions Classifier",
-    page_icon="🐱",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# CSS custom
-st.markdown("""
-<style>
-    .main-title {
-        font-size: 2.4rem;
-        font-weight: 800;
-        text-align: center;
-        margin-bottom: 0.2rem;
-    }
-    .subtitle {
-        text-align: center;
-        color: #888;
-        font-size: 1rem;
-        margin-bottom: 1.5rem;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 1rem;
-        text-align: center;
-        border-left: 4px solid #4CAF50;
-    }
-    .emotion-badge {
-        display: inline-block;
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
-        font-weight: bold;
-        font-size: 1.1rem;
-        color: white;
-    }
-    .tip-box {
-        background: #f0f7ff;
-        border-left: 4px solid #2196F3;
-        padding: 0.8rem 1rem;
-        border-radius: 0 8px 8px 0;
-        margin-top: 0.5rem;
-    }
-    div[data-testid="stSidebar"] {
-        background: #1a1a2e;
-    }
-    div[data-testid="stSidebar"] * {
-        color: #eee !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # SIDEBAR
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+stats  = get_dataset_stats()
+model  = load_model()
+total  = sum(len(v) for s in stats.values() for v in s.values())
+
 with st.sidebar:
-    st.markdown("## 🐱 Cat Emotions")
-    st.markdown("---")
+    st.markdown("""
+    <div class="sidebar-logo">
+        <i class="fa-solid fa-cat"></i>
+        <h2>Cat Emotions</h2>
+        <p>Classificateur félin — v1.0</p>
+    </div>""", unsafe_allow_html=True)
+
     page = st.radio(
         "Navigation",
-        ["🔍 Prédiction", "📊 Dashboard Dataset", "📈 Résultats Modèles", "ℹ️ À propos"],
+        NAV_PAGES,
         label_visibility="collapsed",
     )
+
     st.markdown("---")
-    st.markdown("**Dataset**")
-    stats = get_dataset_stats()
-    total = sum(len(v) for v in stats["train"].values()) + \
-            sum(len(v) for v in stats["valid"].values())
-    st.markdown(f"- {total} images · 7 classes")
-    st.markdown(f"- Source : Roboflow (CC BY 4.0)")
-    st.markdown("**Modèle actif**")
-    model = load_model()
+    st.markdown(f"""
+    <div style="padding:0 0.5rem">
+        <div class="section-title">{icon('fa-database')} Dataset</div>
+        <p style="font-size:.82rem;color:#94a3b8;margin:0">{total} images · 7 classes</p>
+        <p style="font-size:.82rem;color:#94a3b8;margin:0.2rem 0 0.8rem 0">Roboflow · CC BY 4.0</p>
+        <div class="section-title">{icon('fa-microchip')} Modèle</div>
+    </div>""", unsafe_allow_html=True)
+
     if model is not None:
-        st.success("MobileNetV2 ✓ chargé")
+        st.markdown('<span class="badge-ok"><i class="fa-solid fa-circle-check"></i> MobileNetV2 chargé</span>',
+                    unsafe_allow_html=True)
     else:
-        st.warning("Modèle non trouvé\n(lancez le notebook d'abord)")
+        st.markdown('<span class="badge-err"><i class="fa-solid fa-triangle-exclamation"></i> Modèle absent</span>',
+                    unsafe_allow_html=True)
+        st.caption("Lancez `python train.py` pour générer le modèle.")
+
     st.markdown("---")
     st.caption("Projet Data · Mars 2026")
 
-# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────
 # PAGE : PRÉDICTION
-# ─────────────────────────────────────────────────────────────────────────────
-if "🔍 Prédiction" in page:
-    st.markdown('<div class="main-title">🐱 Classificateur d\'Émotions Félines</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Uploadez une photo de chat — le modèle détecte son émotion en temps réel</div>', unsafe_allow_html=True)
+# ─────────────────────────────────────────────────────────────
+if page == "Prédiction":
+    page_header("fa-magnifying-glass", "Prédiction",
+                "Uploadez une photo de chat — détection de l'émotion en temps réel")
 
-    col_upload, col_result = st.columns([1, 1], gap="large")
+    col_in, col_out = st.columns([1, 1], gap="large")
 
-    with col_upload:
-        st.markdown("### 📂 Image d'entrée")
-        source = st.radio("Source", ["Uploader une image", "Choisir un exemple"], horizontal=True)
-
+    with col_in:
+        st.markdown(f'<div class="section-title">{icon("fa-image")} Image d\'entrée</div>',
+                    unsafe_allow_html=True)
+        source = st.radio("Source", ["Uploader", "Exemple du dataset"], horizontal=True,
+                          label_visibility="collapsed")
         pil_img = None
 
-        if source == "Uploader une image":
-            uploaded = st.file_uploader(
-                "Glissez-déposez ou cliquez pour choisir",
-                type=["jpg", "jpeg", "png"],
-                label_visibility="collapsed",
-            )
-            if uploaded:
-                pil_img = Image.open(uploaded).convert("RGB")
-
+        if source == "Uploader":
+            up = st.file_uploader("", type=["jpg", "jpeg", "png"],
+                                  label_visibility="collapsed")
+            if up:
+                pil_img = Image.open(up).convert("RGB")
         else:
-            samples = get_sample_images(n_per_class=4)
-            cls_choice = st.selectbox("Classe", CLASSES)
+            samples = get_sample_images()
+            cls_choice = st.selectbox("Émotion", CLASSES)
             if cls_choice and samples.get(cls_choice):
                 paths = samples[cls_choice]
-                cols_prev = st.columns(len(paths))
-                selected_path = None
-                for i, (col, p) in enumerate(zip(cols_prev, paths)):
+                thumb_cols = st.columns(len(paths))
+                for i, (col, p) in enumerate(zip(thumb_cols, paths)):
                     with col:
-                        img_th = Image.open(p).resize((100, 100))
-                        if st.button("▶", key=f"ex_{i}", use_container_width=True):
-                            selected_path = p
-                        st.image(img_th, use_column_width=True)
-                if selected_path:
-                    pil_img = Image.open(selected_path).convert("RGB")
-                    st.session_state["example_img"] = pil_img
-                elif "example_img" in st.session_state:
-                    pil_img = st.session_state["example_img"]
+                        th = Image.open(p).resize((90, 90))
+                        st.image(th, use_container_width=True)
+                        if st.button("▶", key=f"ex{i}", use_container_width=True):
+                            st.session_state["ex_img"] = str(p)
+                if "ex_img" in st.session_state:
+                    pil_img = Image.open(st.session_state["ex_img"]).convert("RGB")
 
         if pil_img:
-            st.image(pil_img, caption="Image sélectionnée", use_column_width=True)
+            st.image(pil_img, caption="Image chargée", use_container_width=True)
 
-    with col_result:
-        st.markdown("### 🎯 Résultat")
+    with col_out:
+        st.markdown(f'<div class="section-title">{icon("fa-chart-pie")} Résultat</div>',
+                    unsafe_allow_html=True)
 
         if pil_img is None:
-            st.info("Chargez une image pour obtenir une prédiction.")
+            st.info("Chargez une image pour lancer la prédiction.")
         elif model is None:
-            st.error("Modèle non disponible. Entraînez-le d'abord via le notebook.")
+            st.error("Modèle non disponible. Lancez `python train.py` puis rafraîchissez.")
         else:
             with st.spinner("Analyse en cours..."):
                 pred_class, probas = predict(model, pil_img)
                 confidence = probas[pred_class]
+                color      = PALETTE[pred_class]
+                fa_icon    = EMOTION_ICON[pred_class]
 
-                # ── Émotion principale ──────────────────────────────────
-                emoji = EMOTION_EMOJI[pred_class]
-                color = PALETTE[pred_class]
-                st.markdown(
-                    f'<div style="text-align:center; padding: 1rem;">'
-                    f'<span style="font-size:3rem">{emoji}</span><br>'
-                    f'<span class="emotion-badge" style="background:{color}; font-size:1.4rem">'
-                    f'{pred_class}</span><br>'
-                    f'<span style="color:#888; font-size:0.9rem; margin-top:0.3rem; display:block">'
-                    f'Confiance : {confidence:.1%}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f"""
+                <div class="pred-card">
+                    <div class="pred-icon">
+                        <i class="fa-solid {fa_icon}" style="color:{color}"></i>
+                    </div>
+                    <div>
+                        <span class="pred-label" style="background:{color}">{pred_class}</span>
+                    </div>
+                    <div class="pred-conf">
+                        <i class="fa-solid fa-gauge"></i>
+                        Confiance : <strong>{confidence:.1%}</strong>
+                    </div>
+                </div>
+                <div class="tip-box">
+                    <i class="fa-solid fa-lightbulb"></i> {EMOTION_TIPS[pred_class]}
+                </div>
+                """, unsafe_allow_html=True)
 
-                # ── Conseil ─────────────────────────────────────────────
-                st.markdown(
-                    f'<div class="tip-box">💡 {EMOTION_TIPS[pred_class]}</div>',
-                    unsafe_allow_html=True,
-                )
+                if confidence < 0.55:
+                    st.markdown(f"""
+                    <div class="warn-box">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        Confiance faible ({confidence:.1%}) — résultat incertain.
+                        Consultez un vétérinaire comportementaliste.
+                    </div>""", unsafe_allow_html=True)
 
-                st.markdown("#### Distribution des probabilités")
-                df_proba = pd.DataFrame(
-                    {"Émotion": list(probas.keys()), "Probabilité": list(probas.values())}
-                ).sort_values("Probabilité", ascending=True)
-
-                fig, ax = plt.subplots(figsize=(6, 3.5))
-                bar_colors = [PALETTE.get(c, "#aaa") for c in df_proba["Émotion"]]
-                ax.barh(df_proba["Émotion"], df_proba["Probabilité"],
-                        color=bar_colors, edgecolor="white", linewidth=0.5)
+                st.markdown(f'<div class="section-title">{icon("fa-bars-staggered")} Probabilités par classe</div>',
+                            unsafe_allow_html=True)
+                df_p = pd.DataFrame({"Émotion": list(probas.keys()),
+                                     "Probabilité": list(probas.values())}
+                                    ).sort_values("Probabilité", ascending=True)
+                fig, ax = plt.subplots(figsize=(6, 3.2))
+                ax.barh(df_p["Émotion"], df_p["Probabilité"],
+                        color=[PALETTE[c] for c in df_p["Émotion"]],
+                        edgecolor="white", linewidth=0.5)
                 ax.set_xlim(0, 1)
-                ax.axvline(0.5, color="gray", linestyle="--", alpha=0.4)
-                ax.set_xlabel("Probabilité")
-                ax.set_title("Probabilités par classe", fontsize=10, fontweight="bold")
-                ax.grid(axis="x", alpha=0.3)
+                ax.axvline(0.5, color="#94a3b8", linestyle="--", alpha=0.5, linewidth=0.8)
+                ax.set_xlabel("Probabilité", fontsize=9)
+                ax.tick_params(labelsize=9)
+                ax.spines[["top", "right"]].set_visible(False)
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 plt.close()
 
-                # ── Grad-CAM ─────────────────────────────────────────────
-                with st.expander("🔬 Voir la carte d'attention Grad-CAM"):
-                    heatmap = get_gradcam(model, pil_img)
-                    if heatmap is not None:
-                        overlay = overlay_gradcam(pil_img, heatmap)
+                with st.expander("Carte d'attention Grad-CAM"):
+                    hm = get_gradcam(model, pil_img)
+                    if hm is not None:
+                        ov = overlay_gradcam(pil_img, hm)
                         c1, c2, c3 = st.columns(3)
-                        c1.image(pil_img.resize((200, 200)), caption="Original")
-                        hm_img = Image.fromarray(
-                            np.uint8(plt.cm.jet(heatmap) * 255)
-                        ).resize((200, 200))
-                        c2.image(hm_img, caption="Heatmap")
-                        c3.image(overlay.resize((200, 200)), caption="Superposition")
-                        st.caption(
-                            "Les zones chaudes (rouge/jaune) indiquent les régions "
-                            "qui ont le plus influencé la prédiction "
-                            "(oreilles, yeux, moustaches)."
-                        )
+                        c1.image(pil_img.resize((180, 180)), caption="Original")
+                        c2.image(Image.fromarray(np.uint8(plt.cm.jet(hm) * 255)).resize((180, 180)),
+                                 caption="Heatmap")
+                        c3.image(ov.resize((180, 180)), caption="Superposition")
+                        st.caption("Zones chaudes = régions déterminantes (oreilles, yeux, moustaches).")
                     else:
-                        st.info("Grad-CAM indisponible (modèle ou TensorFlow requis).")
+                        st.info("Grad-CAM non disponible.")
 
-                # ── Alerte faible confiance ───────────────────────────────
-                if confidence < 0.55:
-                    st.warning(
-                        f"⚠️ Confiance faible ({confidence:.1%}). "
-                        "Le modèle est incertain — consultez un vétérinaire comportementaliste."
-                    )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE : DASHBOARD DATASET
-# ─────────────────────────────────────────────────────────────────────────────
-elif "📊 Dashboard" in page:
-    st.markdown("## 📊 Dashboard — Exploration du Dataset")
-    stats = get_dataset_stats()
+# ─────────────────────────────────────────────────────────────
+# PAGE : DATASET
+# ─────────────────────────────────────────────────────────────
+elif page == "Dataset":
+    page_header("fa-database", "Exploration du Dataset",
+                "Distribution, statistiques et galerie d'exemples")
 
-    # ── KPIs ──────────────────────────────────────────────────────────────
-    counts_train = {c: len(stats["train"].get(c, [])) for c in CLASSES}
-    counts_valid = {c: len(stats["valid"].get(c, [])) for c in CLASSES}
-    total_train = sum(counts_train.values())
-    total_valid = sum(counts_valid.values())
-    total_all   = total_train + total_valid
+    counts_t = {c: len(stats["train"].get(c, [])) for c in CLASSES}
+    counts_v = {c: len(stats["valid"].get(c, [])) for c in CLASSES}
+    t_train  = sum(counts_t.values())
+    t_valid  = sum(counts_v.values())
+    t_all    = t_train + t_valid
+    ratio    = max(counts_t[c] + counts_v[c] for c in CLASSES) / \
+               max(1, min(counts_t[c] + counts_v[c] for c in CLASSES))
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total images", total_all)
-    k2.metric("Train", total_train)
-    k3.metric("Validation", total_valid)
-    k4.metric("Classes", len(CLASSES))
+    kpi_row([
+        ("fa-images",       str(t_all),   "Images totales"),
+        ("fa-layer-group",  str(len(CLASSES)), "Classes"),
+        ("fa-graduation-cap", str(t_train), "Train"),
+        ("fa-flask",        str(t_valid),  "Validation"),
+    ])
 
-    st.markdown("---")
-
-    col_dist, col_pie = st.columns(2)
-
-    with col_dist:
-        st.markdown("#### Distribution par classe")
-        df_dist = pd.DataFrame({
-            "Classe":    CLASSES,
-            "Train":     [counts_train[c] for c in CLASSES],
-            "Valid":     [counts_valid[c] for c in CLASSES],
-        })
-        df_dist["Total"] = df_dist["Train"] + df_dist["Valid"]
-
-        fig, ax = plt.subplots(figsize=(7, 4))
-        x = np.arange(len(CLASSES))
-        w = 0.35
-        ax.bar(x - w/2, df_dist["Train"], w, label="Train",
-               color=[PALETTE[c] for c in CLASSES], alpha=0.85)
-        ax.bar(x + w/2, df_dist["Valid"], w, label="Valid",
-               color=[PALETTE[c] for c in CLASSES], alpha=0.45)
-        ax.set_xticks(x)
-        ax.set_xticklabels(CLASSES, rotation=25, ha="right")
-        ax.set_ylabel("Nombre d'images")
-        ax.legend()
-        ax.grid(axis="y", alpha=0.3)
-        plt.tight_layout()
-        st.pyplot(fig, use_container_width=True)
-        plt.close()
-
-    with col_pie:
-        st.markdown("#### Répartition globale")
-        totals = [counts_train[c] + counts_valid[c] for c in CLASSES]
-        fig, ax = plt.subplots(figsize=(5, 5))
-        wedges, texts, autotexts = ax.pie(
-            totals,
-            labels=CLASSES,
-            colors=[PALETTE[c] for c in CLASSES],
-            autopct="%1.1f%%",
-            startangle=90,
-            wedgeprops={"edgecolor": "white", "linewidth": 1.2},
-        )
-        for at in autotexts:
-            at.set_fontsize(8)
-        plt.tight_layout()
-        st.pyplot(fig, use_container_width=True)
-        plt.close()
-
-    # ── Tableau ───────────────────────────────────────────────────────────
-    st.markdown("#### Tableau détaillé")
-    df_display = df_dist.copy()
-    df_display["% du total"] = (df_display["Total"] / total_all * 100).map("{:.1f}%".format)
-    st.dataframe(df_display.set_index("Classe"), use_container_width=True)
-
-    # ── Galerie par classe ─────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### Galerie d'exemples par émotion")
-    selected_cls = st.selectbox("Choisir une émotion", CLASSES, key="gallery_cls")
-
-    all_paths_cls = (
-        stats["train"].get(selected_cls, []) +
-        stats["valid"].get(selected_cls, [])
-    )
-    if all_paths_cls:
-        random.seed(42)
-        gallery_paths = random.sample(all_paths_cls, min(8, len(all_paths_cls)))
-        gcols = st.columns(8)
-        for col, p in zip(gcols, gallery_paths):
-            col.image(Image.open(p).resize((120, 120)),
-                      caption=selected_cls,
-                      use_column_width=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE : RÉSULTATS MODÈLES
-# ─────────────────────────────────────────────────────────────────────────────
-elif "📈 Résultats" in page:
-    st.markdown("## 📈 Résultats et Comparaison des Modèles")
-
-    st.info(
-        "Ces métriques sont indicatives et reflètent les résultats typiques obtenus "
-        "après exécution complète du notebook. Lancez le notebook pour obtenir vos valeurs exactes."
-    )
-
-    # ── Données de résultats (issues du notebook) ─────────────────────────
-    results = pd.DataFrame({
-        "Modèle":    ["Random Forest + HOG", "CNN from scratch", "MobileNetV2 (Transfer Learning)"],
-        "Accuracy":  [0.489, 0.601, 0.731],
-        "F1-macro":  [0.467, 0.578, 0.712],
-        "Paramètres": ["N/A", "~2.1M", "~3.4M"],
-        "Temps entraînement": ["~2 min", "~15 min", "~20 min"],
-    })
-
-    # ── KPIs meilleur modèle ──────────────────────────────────────────────
-    st.markdown("#### Meilleur modèle : MobileNetV2")
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Accuracy (test)", "73.1%", "+13.0% vs CNN scratch")
-    m2.metric("F1-macro (test)", "71.2%", "+13.4% vs CNN scratch")
-    m3.metric("Gain vs baseline RF", "+24.5 pts F1", "")
-
-    st.markdown("---")
-
-    # ── Tableau ───────────────────────────────────────────────────────────
-    st.markdown("#### Tableau comparatif")
-    st.dataframe(results.set_index("Modèle"), use_container_width=True)
-
-    # ── Graphiques ────────────────────────────────────────────────────────
-    col_bar, col_radar = st.columns(2)
+    col_bar, col_pie = st.columns(2)
 
     with col_bar:
-        st.markdown("#### Accuracy vs F1-macro")
+        st.markdown(f'<div class="section-title">{icon("fa-chart-bar")} Distribution par classe</div>',
+                    unsafe_allow_html=True)
         fig, ax = plt.subplots(figsize=(7, 4))
-        x = np.arange(3)
-        w = 0.35
-        labels = ["RF+HOG", "CNN scratch", "MobileNetV2"]
-        colors = ["#E07070", "#70A0E0", "#70C080"]
-        ax.bar(x - w/2, results["Accuracy"], w, label="Accuracy",
-               color=colors, alpha=0.7, edgecolor="white")
-        ax.bar(x + w/2, results["F1-macro"], w, label="F1-macro",
-               color=colors, alpha=1.0, edgecolor="white")
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels)
-        ax.set_ylim(0, 1)
-        ax.legend()
-        ax.grid(axis="y", alpha=0.3)
-        ax.set_title("Comparaison Accuracy / F1-macro", fontweight="bold")
-        for xi, (a, f) in enumerate(zip(results["Accuracy"], results["F1-macro"])):
-            ax.text(xi - w/2, a + 0.01, f"{a:.3f}", ha="center", fontsize=8)
-            ax.text(xi + w/2, f + 0.01, f"{f:.3f}", ha="center", fontsize=8)
+        x = np.arange(len(CLASSES)); w = 0.38
+        ax.bar(x - w/2, [counts_t[c] for c in CLASSES], w, label="Train",
+               color=[PALETTE[c] for c in CLASSES], alpha=0.9)
+        ax.bar(x + w/2, [counts_v[c] for c in CLASSES], w, label="Valid",
+               color=[PALETTE[c] for c in CLASSES], alpha=0.45)
+        ax.set_xticks(x); ax.set_xticklabels(CLASSES, rotation=25, ha="right", fontsize=9)
+        ax.set_ylabel("Nombre d'images", fontsize=9)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.legend(fontsize=9); ax.grid(axis="y", alpha=0.25)
         plt.tight_layout()
-        st.pyplot(fig, use_container_width=True)
-        plt.close()
+        st.pyplot(fig, use_container_width=True); plt.close()
 
-    with col_radar:
-        st.markdown("#### F1 par classe — MobileNetV2")
-        # Résultats typiques par classe
-        f1_per_class = {
-            "Angry": 0.72, "Disgusted": 0.63, "Happy": 0.78,
-            "Normal": 0.74, "Sad": 0.69, "Scared": 0.71, "Surprised": 0.68,
-        }
-        fig, ax = plt.subplots(figsize=(6, 4))
-        cls_names = list(f1_per_class.keys())
-        f1_vals   = list(f1_per_class.values())
-        bar_c = [PALETTE[c] for c in cls_names]
-        ax.barh(cls_names, f1_vals, color=bar_c, edgecolor="white")
-        ax.set_xlim(0, 1)
-        ax.axvline(0.5, color="gray", linestyle="--", alpha=0.4)
-        ax.set_xlabel("F1-score")
-        ax.set_title("F1 par classe (MobileNetV2)", fontweight="bold")
-        ax.grid(axis="x", alpha=0.3)
-        for i, v in enumerate(f1_vals):
-            ax.text(v + 0.01, i, f"{v:.2f}", va="center", fontsize=9)
+    with col_pie:
+        st.markdown(f'<div class="section-title">{icon("fa-chart-pie")} Répartition globale</div>',
+                    unsafe_allow_html=True)
+        totals = [counts_t[c] + counts_v[c] for c in CLASSES]
+        fig, ax = plt.subplots(figsize=(5, 4.5))
+        wedges, texts, autos = ax.pie(
+            totals, labels=CLASSES, colors=[PALETTE[c] for c in CLASSES],
+            autopct="%1.1f%%", startangle=90,
+            wedgeprops={"edgecolor": "white", "linewidth": 1.2},
+            textprops={"fontsize": 8},
+        )
+        for at in autos: at.set_fontsize(7.5)
         plt.tight_layout()
-        st.pyplot(fig, use_container_width=True)
-        plt.close()
+        st.pyplot(fig, use_container_width=True); plt.close()
 
-    # ── Analyse des erreurs typiques ──────────────────────────────────────
+    st.markdown(f'<div class="section-title">{icon("fa-table")} Tableau détaillé</div>',
+                unsafe_allow_html=True)
+    df = pd.DataFrame({
+        "Classe": CLASSES,
+        "Train":  [counts_t[c] for c in CLASSES],
+        "Valid":  [counts_v[c] for c in CLASSES],
+        "Total":  [counts_t[c] + counts_v[c] for c in CLASSES],
+        "% total": [f"{(counts_t[c]+counts_v[c])/t_all*100:.1f}%" for c in CLASSES],
+    })
+    st.dataframe(df.set_index("Classe"), use_container_width=True)
+
+    st.markdown(f"""
+    <div class="tip-box">
+        <i class="fa-solid fa-circle-info"></i>
+        Déséquilibre max/min : <strong>{ratio:.1f}×</strong> —
+        modéré, traité par <strong>class_weight='balanced'</strong> (RF)
+        et <strong>F1-macro</strong> comme métrique principale.
+    </div>""", unsafe_allow_html=True)
+
     st.markdown("---")
-    st.markdown("#### Confusions fréquentes")
-    confusions = pd.DataFrame({
-        "Classe réelle": ["Scared", "Angry", "Disgusted", "Surprised"],
-        "Souvent confondu avec": ["Angry", "Scared", "Sad", "Normal"],
-        "Explication": [
-            "Oreilles aplaties dans les deux cas — différence dans la posture du corps",
+    st.markdown(f'<div class="section-title">{icon("fa-grip")} Galerie par émotion</div>',
+                unsafe_allow_html=True)
+    cls_sel = st.selectbox("Émotion à explorer", CLASSES, key="gal_cls",
+                           label_visibility="visible")
+    paths_cls = stats["train"].get(cls_sel, []) + stats["valid"].get(cls_sel, [])
+    if paths_cls:
+        random.seed(42)
+        gallery = random.sample(paths_cls, min(8, len(paths_cls)))
+        cols = st.columns(8)
+        for col, p in zip(cols, gallery):
+            col.image(Image.open(p).resize((120, 120)), use_container_width=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# PAGE : RÉSULTATS
+# ─────────────────────────────────────────────────────────────
+elif page == "Résultats":
+    page_header("fa-chart-line", "Résultats des Modèles",
+                "Comparaison baseline, CNN scratch et MobileNetV2 Transfer Learning")
+
+    kpi_row([
+        ("fa-trophy",       "73.1%",  "MobileNetV2 Accuracy"),
+        ("fa-bullseye",     "71.2%",  "MobileNetV2 F1-macro"),
+        ("fa-arrow-trend-up", "+24.5pts", "Gain vs baseline RF"),
+        ("fa-bolt",         "~20 min", "Temps entraînement"),
+    ])
+
+    st.info("Ces métriques sont indicatives. Exécutez le notebook pour obtenir vos valeurs exactes.")
+
+    col_bar, col_cls = st.columns(2)
+
+    with col_bar:
+        st.markdown(f'<div class="section-title">{icon("fa-chart-bar")} Accuracy vs F1-macro</div>',
+                    unsafe_allow_html=True)
+        labels  = ["RF + HOG", "CNN scratch", "MobileNetV2"]
+        acc     = [0.489, 0.601, 0.731]
+        f1      = [0.467, 0.578, 0.712]
+        colors  = ["#E07070", "#70A0E0", "#70C080"]
+        x = np.arange(3); w = 0.35
+        fig, ax = plt.subplots(figsize=(7, 4))
+        b1 = ax.bar(x - w/2, acc, w, label="Accuracy", color=colors, alpha=0.65, edgecolor="white")
+        b2 = ax.bar(x + w/2, f1,  w, label="F1-macro",  color=colors, alpha=1.0,  edgecolor="white")
+        ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=9)
+        ax.set_ylim(0, 1.05)
+        ax.spines[["top","right"]].set_visible(False)
+        ax.legend(fontsize=9); ax.grid(axis="y", alpha=0.2)
+        for xi, (a, f) in enumerate(zip(acc, f1)):
+            ax.text(xi-w/2, a+0.01, f"{a:.3f}", ha="center", fontsize=8)
+            ax.text(xi+w/2, f+0.01, f"{f:.3f}", ha="center", fontsize=8)
+        plt.tight_layout()
+        st.pyplot(fig, use_container_width=True); plt.close()
+
+    with col_cls:
+        st.markdown(f'<div class="section-title">{icon("fa-list-check")} F1 par classe — MobileNetV2</div>',
+                    unsafe_allow_html=True)
+        f1c = {"Angry":0.72,"Disgusted":0.63,"Happy":0.78,
+               "Normal":0.74,"Sad":0.69,"Scared":0.71,"Surprised":0.68}
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.barh(list(f1c.keys()), list(f1c.values()),
+                color=[PALETTE[c] for c in f1c], edgecolor="white")
+        ax.set_xlim(0, 1)
+        ax.axvline(0.5, color="#94a3b8", linestyle="--", alpha=0.5, linewidth=0.8)
+        ax.set_xlabel("F1-score", fontsize=9)
+        ax.spines[["top","right"]].set_visible(False)
+        ax.tick_params(labelsize=9)
+        for i, v in enumerate(f1c.values()):
+            ax.text(v+0.01, i, f"{v:.2f}", va="center", fontsize=8.5)
+        plt.tight_layout()
+        st.pyplot(fig, use_container_width=True); plt.close()
+
+    st.markdown(f'<div class="section-title">{icon("fa-table-columns")} Tableau comparatif</div>',
+                unsafe_allow_html=True)
+    st.markdown("""
+    <table class="comp-table">
+      <thead><tr>
+        <th>Modèle</th><th>Accuracy</th><th>F1-macro</th>
+        <th>Paramètres</th><th>Durée</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Random Forest + HOG</td><td>48.9%</td><td>46.7%</td><td>—</td><td>~2 min</td></tr>
+        <tr><td>CNN from scratch</td><td>60.1%</td><td>57.8%</td><td>~2.1M</td><td>~15 min</td></tr>
+        <tr class="best-row"><td><i class="fa-solid fa-trophy" style="color:#f59e0b"></i> MobileNetV2</td>
+          <td>73.1%</td><td>71.2%</td><td>~3.4M</td><td>~20 min</td></tr>
+      </tbody>
+    </table>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{icon("fa-circle-exclamation")} Confusions fréquentes</div>',
+                unsafe_allow_html=True)
+    conf = pd.DataFrame({
+        "Classe réelle":       ["Scared",  "Angry",  "Disgusted", "Surprised"],
+        "Confondu avec":       ["Angry",   "Scared", "Sad",       "Normal"],
+        "Explication":         [
+            "Oreilles aplaties dans les deux cas — différence via la posture du corps",
             "Expressions similaires : sourcils froncés, regard tendu",
-            "Dégoût et tristesse partagent une posture basse similaire",
-            "Yeux écarquillés, mais contexte différent difficile à capturer",
+            "Dégoût et tristesse partagent une posture basse",
+            "Yeux écarquillés, mais contexte difficile à capturer sur image seule",
         ],
     })
-    st.dataframe(confusions.set_index("Classe réelle"), use_container_width=True)
+    st.dataframe(conf.set_index("Classe réelle"), use_container_width=True)
 
-    # ── Fichiers de sortie ────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### Fichiers générés par le notebook")
-    output_files = [
-        "best_cnn_model.keras",
-        "best_mnv2_model.keras",
-        "eda_class_distribution.png",
-        "eda_samples_per_class.png",
-        "cnn_learning_curves.png",
-        "mnv2_learning_curves.png",
-        "comparison_metrics.png",
-        "comparison_confusion_matrices.png",
-        "gradcam_visualization.png",
+    st.markdown(f'<div class="section-title">{icon("fa-folder-open")} Fichiers générés</div>',
+                unsafe_allow_html=True)
+    files = [
+        ("best_mnv2_model.keras",           "fa-brain",     "Modèle MobileNetV2 sauvegardé"),
+        ("best_cnn_model.keras",            "fa-brain",     "Modèle CNN scratch sauvegardé"),
+        ("eda_class_distribution.png",      "fa-chart-bar", "Distribution des classes"),
+        ("eda_samples_per_class.png",       "fa-grip",      "Galerie exemples EDA"),
+        ("cnn_learning_curves.png",         "fa-chart-line","Courbes d'apprentissage CNN"),
+        ("mnv2_learning_curves.png",        "fa-chart-line","Courbes d'apprentissage MNV2"),
+        ("comparison_metrics.png",          "fa-scale-balanced","Comparaison métriques"),
+        ("gradcam_visualization.png",       "fa-eye",       "Visualisation Grad-CAM"),
     ]
-    for fname in output_files:
-        fpath = BASE_DIR / fname
-        status = "✅" if fpath.exists() else "⏳ (généré après exécution notebook)"
-        st.markdown(f"- `{fname}` {status}")
+    for fname, fa, desc in files:
+        exists = (BASE_DIR / fname).exists()
+        badge = '<span class="badge-ok">présent</span>' if exists \
+                else '<span class="badge-err">à générer</span>'
+        st.markdown(
+            f'{icon(fa)} <code>{fname}</code> — {desc} {badge}',
+            unsafe_allow_html=True,
+        )
 
-# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────
 # PAGE : À PROPOS
-# ─────────────────────────────────────────────────────────────────────────────
-elif "ℹ️" in page:
-    st.markdown("## ℹ️ À propos du projet")
+# ─────────────────────────────────────────────────────────────
+elif page == "À propos":
+    page_header("fa-circle-info", "À propos du projet")
 
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([3, 2], gap="large")
 
     with col1:
+        st.markdown(f'<div class="section-title">{icon("fa-bullseye")} Problématique</div>',
+                    unsafe_allow_html=True)
         st.markdown("""
-### Problématique
-
-Développer un classificateur d'émotions félines à partir d'images
-pour aider propriétaires et vétérinaires à détecter le bien-être
-et le stress des chats lors des interactions humaines.
-
-### Dataset
-
-| Caractéristique | Valeur |
-|---|---|
-| Source | Roboflow Universe — Cat Emotions |
-| Licence | CC BY 4.0 |
-| Images | 671 |
-| Classes | 7 (Angry, Disgusted, Happy, Normal, Sad, Scared, Surprised) |
-| Format | JPEG, résolutions variées |
-
-### Pipeline ML
-
-```
-Images brutes
-    ↓ Scan + nettoyage (corrompues)
-    ↓ Re-split stratifié 70/15/15
-    ↓ Resize 128×128 + normalisation
-    ↓ Data augmentation (flip, rotation, zoom, brightness)
-    ↓
-Baseline : Random Forest + HOG (~47% F1-macro)
-    ↓
-CNN from scratch — 4 blocs Conv + BN + GAP (~58% F1-macro)
-    ↓
-MobileNetV2 Transfer Learning (~71% F1-macro) ← Modèle déployé
-    ↓
-Explicabilité : Grad-CAM (oreilles, yeux, moustaches)
-```
-
-### Métriques choisies
-
-- **F1-macro** : robuste au déséquilibre de classes (métrique principale)
-- **Accuracy** : complémentaire, facile à interpréter
-- **Matrice de confusion** : identifie les paires de classes difficiles
-
-### Limites
-
-- 671 images → variance élevée, généralisation limitée
-- Annotations subjectives sur émotions ambiguës (Scared vs Angry)
-- Biais potentiel : fond, race, éclairage
-- Seuil de confiance recommandé : ≥ 60% pour usage clinique
+        > Développer un classificateur d'émotions félines à partir d'images pour aider
+        > propriétaires et vétérinaires à détecter le bien-être et le stress des chats
+        > lors des interactions humaines.
         """)
 
-    with col2:
-        st.markdown("### Stack technique")
-        stack = {
-            "TensorFlow/Keras": "Modèles deep learning",
-            "MobileNetV2": "Transfer learning backbone",
-            "scikit-learn": "Baseline + métriques",
-            "scikit-image": "Features HOG",
-            "Streamlit": "Interface web",
-            "Pandas/NumPy": "Manipulation données",
-            "Matplotlib/Seaborn": "Visualisations",
-            "Pillow": "Traitement images",
-        }
-        for lib, desc in stack.items():
-            st.markdown(f"**{lib}**  \n{desc}")
+        st.markdown(f'<div class="section-title">{icon("fa-code-branch")} Pipeline ML</div>',
+                    unsafe_allow_html=True)
+        st.code("""
+Images brutes (671)
+    ↓ Scan + détection corrompues
+    ↓ Re-split stratifié 70 / 15 / 15
+    ↓ Resize 128×128 + normalisation
+    ↓ Augmentation (flip, rotation, zoom, brightness)
+    ↓
+Baseline  →  Random Forest + HOG features       (~47% F1)
+Modèle 1  →  CNN 4 blocs (Conv+BN+GAP+Dropout)  (~58% F1)
+Modèle 2  →  MobileNetV2 TL phase 1 + phase 2   (~71% F1) ← déployé
+    ↓
+Explicabilité  →  Grad-CAM (oreilles / yeux / moustaches)
+        """, language="text")
 
-        st.markdown("---")
-        st.markdown("### Recommandations")
-        st.success("Utiliser MobileNetV2 en production")
-        st.warning("Seuil confiance ≥ 60% recommandé")
-        st.info("Enrichir le dataset (≥ 200 imgs/classe)")
+        st.markdown(f'<div class="section-title">{icon("fa-triangle-exclamation")} Limites & recommandations</div>',
+                    unsafe_allow_html=True)
+        limits = [
+            ("fa-database",        "671 images — dataset trop petit pour un CNN industriel"),
+            ("fa-tags",            "Annotations subjectives sur émotions ambiguës (Scared vs Angry)"),
+            ("fa-image",           "Biais de fond, de race et d'éclairage potentiels"),
+            ("fa-gauge",           "Seuil de confiance recommandé ≥ 60% pour usage clinique"),
+        ]
+        for fa, txt in limits:
+            st.markdown(f'<p style="margin:.3rem 0;font-size:.9rem">{icon(fa, "fa-sm")} {txt}</p>',
+                        unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f'<div class="section-title">{icon("fa-database")} Dataset</div>',
+                    unsafe_allow_html=True)
+        rows = [
+            ("Source",   "Roboflow Universe"),
+            ("Licence",  "CC BY 4.0"),
+            ("Images",   "671"),
+            ("Classes",  "7"),
+            ("Format",   "JPEG"),
+        ]
+        for k, v in rows:
+            st.markdown(
+                f'<p style="margin:.25rem 0;font-size:.88rem">'
+                f'<strong>{k} :</strong> {v}</p>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(f'<div class="section-title">{icon("fa-layer-group")} Stack technique</div>',
+                    unsafe_allow_html=True)
+        stack = [
+            ("fa-brain",       "TensorFlow / Keras"),
+            ("fa-mobile",      "MobileNetV2 (backbone)"),
+            ("fa-flask",       "scikit-learn · scikit-image"),
+            ("fa-chart-bar",   "matplotlib · seaborn"),
+            ("fa-globe",       "Streamlit"),
+            ("fa-table",       "pandas · NumPy"),
+            ("fa-image",       "Pillow"),
+        ]
+        for fa, lib in stack:
+            st.markdown(
+                f'<p style="margin:.25rem 0;font-size:.88rem">{icon(fa, "fa-sm")} {lib}</p>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(f'<div class="section-title">{icon("fa-star")} Métriques retenues</div>',
+                    unsafe_allow_html=True)
+        st.markdown("""
+        <p style="font-size:.88rem;margin:.2rem 0">
+            <strong>F1-macro</strong> — métrique principale<br>
+            <em>Robuste au déséquilibre de classes</em>
+        </p>
+        <p style="font-size:.88rem;margin:.2rem 0">
+            <strong>Accuracy</strong> — complémentaire<br>
+            <em>Interprétation intuitive</em>
+        </p>
+        <p style="font-size:.88rem;margin:.2rem 0">
+            <strong>Matrice de confusion</strong><br>
+            <em>Identifie les paires difficiles</em>
+        </p>
+        """, unsafe_allow_html=True)

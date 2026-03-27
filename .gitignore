@@ -1,45 +1,86 @@
-# Modèles entraînés (trop lourds pour git)
+# ── Modèles entraînés (fichiers lourds) ──────────────────────
 *.keras
 *.h5
-*.pkl
+*.pb
+*.tflite
+saved_model/
 
-# Images générées par le notebook
+# ── Figures générées par le notebook ─────────────────────────
 eda_*.png
 cnn_*.png
 mnv2_*.png
 comparison_*.png
 gradcam_*.png
 
-# Dataset (ne pas versionner les images)
+# ── Dataset (ne pas versionner les images) ───────────────────
 train/
 valid/
+test/
+data/
+datasets/
+*.zip
+*.tar.gz
+
+# ── Fichiers Roboflow ─────────────────────────────────────────
 README.roboflow.txt
 README.dataset.txt
 
-# Python
+# ── Scripts temporaires ───────────────────────────────────────
+_gen_notebook.py
+_*.py
+
+# ── Python ───────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
+.Python
+*.so
 .eggs/
 *.egg-info/
 dist/
 build/
+wheels/
 
-# Environnements
+# ── Environnements virtuels ───────────────────────────────────
 .env
-.venv
+.env.*
+.venv/
 venv/
 env/
+ENV/
 .conda/
+*.conda
 
-# Jupyter
+# ── Jupyter ──────────────────────────────────────────────────
 .ipynb_checkpoints/
-*/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+*.nbconvert.ipynb
+profile_default/
+ipython_config.py
 
-# OS
+# ── Streamlit ─────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────
 .DS_Store
+.DS_Store?
 Thumbs.db
 desktop.ini
+ehthumbs.db
 
-# Scripts temporaires
-_gen_notebook.py
+# ── Logs et caches ────────────────────────────────────────────
+*.log
+logs/
+.cache/
+*.pkl
+*.joblib
+mlruns/
+wandb/
