@@ -1,0 +1,45 @@
+# Modèles entraînés (trop lourds pour git)
+*.keras
+*.h5
+*.pkl
+
+# Images générées par le notebook
+eda_*.png
+cnn_*.png
+mnv2_*.png
+comparison_*.png
+gradcam_*.png
+
+# Dataset (ne pas versionner les images)
+train/
+valid/
+README.roboflow.txt
+README.dataset.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Environnements
+.env
+.venv
+venv/
+env/
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Scripts temporaires
+_gen_notebook.py
