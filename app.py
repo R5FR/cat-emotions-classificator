@@ -66,11 +66,49 @@ PALETTE = {
 NAV_PAGES = ["Prédiction", "Dataset", "Résultats", "À propos"]
 
 # ─────────────────────────────────────────────────────────────
+# FAVICON  (généré via PIL — aucune dépendance supplémentaire)
+# ─────────────────────────────────────────────────────────────
+def _make_favicon() -> Image.Image:
+    """Dessine une tête de chat géométrique 64×64 en indigo."""
+    from PIL import ImageDraw
+    size = 64
+    img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d    = ImageDraw.Draw(img)
+    C    = "#6366f1"   # indigo principal
+    DARK = "#1e293b"   # pupilles
+    PINK = "#f9a8d4"   # truffe
+
+    # Oreilles (triangles)
+    d.polygon([(6, 22), (20, 2), (30, 18)], fill=C)
+    d.polygon([(34, 18), (44, 2), (58, 22)], fill=C)
+    # Reflets intérieurs des oreilles
+    d.polygon([(10, 20), (20, 6), (28, 18)], fill="#818cf8")
+    d.polygon([(36, 18), (44, 6), (54, 20)], fill="#818cf8")
+    # Visage
+    d.ellipse([6, 16, 58, 60], fill=C)
+    # Yeux (blanc + pupille)
+    d.ellipse([14, 28, 26, 40], fill="white")
+    d.ellipse([38, 28, 50, 40], fill="white")
+    d.ellipse([17, 31, 23, 37], fill=DARK)
+    d.ellipse([41, 31, 47, 37], fill=DARK)
+    # Reflets pupilles
+    d.ellipse([17, 31, 19, 33], fill="white")
+    d.ellipse([41, 31, 43, 33], fill="white")
+    # Truffe
+    d.polygon([(29, 46), (35, 46), (32, 50)], fill=PINK)
+    # Moustaches
+    d.line([(6, 44), (26, 47)],  fill="white", width=1)
+    d.line([(6, 48), (26, 49)],  fill="white", width=1)
+    d.line([(38, 47), (58, 44)], fill="white", width=1)
+    d.line([(38, 49), (58, 48)], fill="white", width=1)
+    return img
+
+# ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Cat Emotions Classifier",
-    page_icon="fa-face-meh",
+    page_icon=_make_favicon(),
     layout="wide",
     initial_sidebar_state="expanded",
 )
